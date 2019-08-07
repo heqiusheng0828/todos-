@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Todo List</title>
+	<link rel="stylesheet" href="assets/css/base.css">
+	<link rel="stylesheet" href="assets/css/index.css">
+	<link rel="stylesheet" href="/js/nprogress/nprogress.css">
+</head>
+
+<body>
+	<section class="todoapp">
+		<header class="header">
+			<h1>todos</h1>
+			<input type="text" class="new-todo" placeholder="What needs to be done?" autofocus id="task">
+		</header>
+		<!-- This section should be hidden by default and shown when there are todos -->
+		<section class="main">
+			<input class="toggle-all" type="checkbox">
+			<ul class="todo-list" id="todo-list">
+
+			</ul>
+		</section>
+		<!-- This footer should hidden by default and shown when there are todos -->
+		<footer class="footer">
+			<!-- This should be `0 items left` by default -->
+			<span class="todo-count"><strong id="count">0</strong> item left</span>
+			<!-- Remove this if you don't implement routing -->
+			<ul class="filters">
+				<li>
+					<a class="selected" href="javascript:;">All</a>
+				</li>
+				<li>
+					<a href="javascript:;">Active</a>
+				</li>
+				<li>
+					<a href="javascript:;">Completed</a>
+				</li>
+			</ul>
+			<!-- Hidden if no completed items are left ↓ -->
+			<button class="clear-completed">Clear completed</button>
+		</footer>
+	</section>
+	<script src="/js/jquery.min.js"></script>
+	<script src="/js/template-web.js"></script>
+	<script src="/js/nprogress/nprogress.js"></script>
+	<!-- 任务列表模板 -->
+	<script type="text/html" id="taskTpl">
+			{{each tasks}}
+			<li class="{{$value.completed ? 'completed' : ''}}">
+				<div class="view">
+					<input class="toggle" type="checkbox" 
+					{{$value.completed? 'checked':''}}>
+					<label>{{$value.title}}</label>
+					<button class="destroy" data-id="{{$value._id}}"></button>
+				</div>
+				<input class="edit">
+			</li>
+			{{/each}}
+		</script>
+	<script type="text/javascript">
+
+		/* 
+		展示任务列表
+		1. 准备一个放置任务列表的数组
+		2. 向服务器端发送请求，获取已存在的任务
+		3. 将已存在的任务存储在任务列表数组中
+		4. 通过模板引擎将任务列表数组中的任务显示在页面中
+		*/
+		// 用于存放任务列表的数组
+		var taskAry = [];
+		// 选择任务列表容器
+		var taskBox = $('#todo-list');
+		//添加任务文本框
+		var taskInp = $('#task');
+		//用于储存为完成任务数量strong标签
+		let strong =$('#count');
+
+		// 向服务器端发送请求 获取已经存在的任务
+		$.ajax({
+			url: '/todo/task',
+			type: 'get',
+			success: function (res) {
+				//consoleconsole.log(res)
+				// 将已存在的任务存储在taskAry变量中
+				taskAry = res;
+
+				// 拼接字符串 将拼接好的字符串显示在页面中
+				var html = template('taskTpl', {
+					tasks: taskAry
+				});
+				taskBox.html(html);
+				//计算为完成的数量
+				calcCount()
+			}
+		})
+		/* 
+		添加任务
+		1. 为文本框绑定键盘抬起事件，在事件处理函数中判断当前用户敲击的是否是回车键
+		2. 当用户敲击回车键的时候，判断用户在文本框中是否输入了任务名称
+		3. 向服务器端发送请求，将用户输入的任务名称添加到数据库中，同时将任务添加到任务数组中
+		4. 通过模板引擎将任务列表数组中的任务显示在页面中
+		*/
+		//获取文本框并且添加键盘抬起事件
+		taskInp.on('keyup', function (e) {
+			//如果用户键盘敲击的是回车键
+			if (e.keyCode == 13) {
+				//判断用户是否在文本框输入了任务名称
+				let taskName = $(this).val();
+				//console.log(taskName)
+				if (taskName.trim().length == 0) {
+					alert('请输入任务名称')
+					//阻止代码向下执行
+					return;
+				}
+				//向服务器发送请求 添加任务
+				$.ajax({
+					type: 'post',
+					url: '/todo/addTask',
+					//post json请求头
+					contentType: 'application/json',
+					data: JSON.stringify({ title: taskName }),
+					success: function (res) {
+						//将任务添加到任务列表中
+						taskAry.push(res);
+						//拼接字符串 将拼接好的字符串显示在页面上
+						render();
+						//清空文本框中的内容
+						taskInp.val('');
+						//计算为完成的数量
+					calcCount()
+					}
+				})
+			}
+		});
+		//拼接字符床 将拼接好的字符串显示在页面中
+		function render() {
+			//字符串拼接
+			let html = template('taskTpl', {
+				tasks: taskAry
+			});
+			//将拼接好的字符串显示在ul标签中
+			taskBox.html(html);
+
+		}
+		//当用户点击删除按钮时触发ul标签身上的点击事件
+		taskBox.on('click', '.destroy', function () {
+			//删除的任务的id
+			let id = $(this).attr('data-id');
+			//向服务器端发送请求发送删除 任务
+			$.ajax({
+				url: '/todo/deleteTask',
+				type: 'get',
+				data: {
+					_id: id
+				},
+				success: function (res) {
+					//从任务数组中找到已经删除掉的任务的索引
+					let index = taskAry.findIndex(item => item._id == id);
+					//将任务从数组中删除
+					taskAry.splice(index, 1);
+					//重新将任务数组中的袁术显示在页面中
+					render();
+					//计算为完成的数量
+					calcCount()
+				}
+			})
+		});
+		//当用户改变任务名称前的复选框状态时触发
+		taskBox.on('change', '.toggle', function () {
+			//代表复选框是否选中 true 选中 false 未选中的
+			const status = $(this).is(':checked');
+			//当前点击任务的id
+			const id = $(this).siblings('button').attr('data-id');
+			//向服务器端发送请求.更改任务状态
+			$.ajax({
+				type: 'post',
+				url: '/todo/modifyTask',
+				data: JSON.stringify({ _id: id, completed: status }),
+				contentType: 'application/json',
+				success: function (response) {
+					// 将任务状态同步到任务数组中
+					let task = taskAry.find(item => item._id == id);
+					// 更改任务状态
+					task.completed = response.completed;
+					// 将数组中任务的最新状态更新到页面中
+					render();
+				//计算为完成的数量
+				calcCount()
+
+				}
+			})
+		});
+		//当双击事件名称的时候触发
+		taskBox.on('dblclick', 'label', function () {
+			//让任务处于编辑状态
+			$(this).parent().parent().addClass('editing');
+			//将任务名称显示在文本框中
+			$(this).parent().siblings('input').val($(this).text());
+			//让文本框获取焦点
+			$(this).parent().siblings('input').focus();
+		})
+		//当文本框离开焦点的时候
+		taskBox.on('blur', '.edit', function () {
+			//最新的任务名称
+			let newTaskName = $(this).val();
+			//编辑任务id
+			let id = $(this).siblings().find('button').attr('data-id');
+			//向服务端发送请求. 修改任务名称
+			$.ajax({
+				url: '/todo/modifyTask',
+				type: 'post',
+				data: JSON.stringify({ _id: id, title: newTaskName }),
+				contentType: 'application/json',
+				success: function (res) {
+					//将当期任务的最新状态同步到任务数组中
+					let task = taskAry.find(item => item._id == id);
+					//修改任务名称
+					task.title = res.title;
+					//将任务数组中的任务同步到页面中
+					render();
+					//计算为完成的数量
+					calcCount()
+				}
+			})
+		});
+		//用于计算未完成任务的数量
+		function calcCount(){
+			//存储结果的变量
+			let count = 0;
+			//将未完成的任务过滤到一个新的数组中
+			let newAry = taskAry.filter(item => item.completed ==false);
+			//将新数组的长度赋值给count
+			count =newAry.length
+			//将未完成的任务数量显示在页面中
+			strong.text(count)
+		}
+	</script>
+</body>
+
+</html>
